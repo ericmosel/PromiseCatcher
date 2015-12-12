@@ -3,6 +3,8 @@ class PromiseCatcher
     Path = require('path')
     Fs = require('fs')
 
+    thisInstance = null
+    
     liveCacheItems = 
         metaData: []
         ids: []
@@ -14,64 +16,68 @@ class PromiseCatcher
 
     debugMode = true
     cachePath = ''
-    maxCacheItems = 256
-    candidateQueueLength = 40
+    maxCacheItems = 1024
+    candidateQueueLength = 20
     candidateRequestThreshold = 2
     
-    constructor: (options) ->
-        options.cachePath?= ''
-        options.ttl ?= 240
-        options.maxCacheItems?=256
-        options.candidateQueueLength?=40
-        options.candidateRequestThreshold?=2
-        options.debug?=false
-        
-        debugMode = options.debug
-        cachePath = options.cachePath + 'promises' + Path.sep
-        maxCacheItems = options.maxCacheItems
-        candidateQueueLength = options.candidateQueueLength
-        candidateRequestThreshold = options.candidateRequestThreshold 
-        
-        index = 0
-        while index++ < candidateQueueLength
-            candidateQueue.ids.push('')
-            candidateQueue.requestCount.push(0)
-        
-        cachePath = options.cachePath + 'promises' + Path.sep
-        maxCacheItems = options.maxCacheItems
-        
-        if  Fs.existsSync(cachePath)
-            Fs.readdirSync(cachePath).forEach (file,index) ->
-                curPath = cachePath + file
-                Fs.unlinkSync curPath
-        else
-            Fs.mkdir cachePath
-            
+    @Instance: (options) ->
+        thisInstance ?= new instancePrivateClass(options)
     
-    GetCache: ( id, promisesToCache ) ->
-        promises = []
-        if (liveCacheItems.ids[id] != undefined)
-            indexMetaData =  liveCacheItems.ids[id];
-            item = liveCacheItems.metaData[indexMetaData];
-            if ''+item.id == ''+id
-                promises = getCache id, promisesToCache
+    class instancePrivateClass
+        constructor: (options) ->
+            options.cachePath?= ''
+            options.ttl ?= 1024
+            options.maxCacheItems?=256
+            options.candidateQueueLength?=20
+            options.candidateRequestThreshold?=2
+            options.debug?=false
+            
+            debugMode = options.debug
+            cachePath = options.cachePath + 'promises' + Path.sep
+            maxCacheItems = options.maxCacheItems
+            candidateQueueLength = options.candidateQueueLength
+            candidateRequestThreshold = options.candidateRequestThreshold 
+            
+            index = 0
+            while index++ < candidateQueueLength
+                candidateQueue.ids.push('')
+                candidateQueue.requestCount.push(0)
+            
+            cachePath = options.cachePath + 'promises' + Path.sep
+            maxCacheItems = options.maxCacheItems
+            
+            if  Fs.existsSync(cachePath)
+                Fs.readdirSync(cachePath).forEach (file,index) ->
+                    curPath = cachePath + file
+                    Fs.unlinkSync curPath
+            else
+                Fs.mkdir cachePath
+                
+        
+        GetCache: ( id, promisesToCache ) ->
+            promises = []
+            if (liveCacheItems.ids[id] != undefined)
+                indexMetaData =  liveCacheItems.ids[id];
+                item = liveCacheItems.metaData[indexMetaData];
+                if ''+item.id == ''+id
+                    promises = getCache id, promisesToCache
+                else
+                    promiseIndex = 0
+                    while promiseIndex < promisesToCache.length
+                        promises.push promisesToCache[promiseIndex]
+                        promiseIndex++                
+
             else
                 promiseIndex = 0
                 while promiseIndex < promisesToCache.length
                     promises.push promisesToCache[promiseIndex]
-                    promiseIndex++                
-
-        else
-            promiseIndex = 0
-            while promiseIndex < promisesToCache.length
-                promises.push promisesToCache[promiseIndex]
-                promiseIndex++
-                
-        promises
-        
-    SetCache: ( id, data ) ->
-        setCache id, data
-        
+                    promiseIndex++
+                    
+            promises
+            
+        SetCache: ( id, data ) ->
+            setCache id, data
+            
     #Private methods
 
     getCache = ( id, promisesToCache ) ->
@@ -87,7 +93,7 @@ class PromiseCatcher
                         indexMetaData =  liveCacheItems.ids[id];
                         liveCacheItems.metaData[indexMetaData].lastUsed = Date.now()
                         cachedData = JSON.parse(data)
-                        cachedData.fromPromiseCatcher = true
+                        cachedData.IsFromPromiseCatcher = true
                         fulfill(cachedData)
         
         returnPromises

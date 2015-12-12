@@ -1,0 +1,28 @@
+{
+  "name": "promise-catcher",
+  "version": "1.0.0",
+  "description": "A disk-based caching module for caching time-expensive Promises",
+  "main": "PromiseCatcher.js",
+  "dependencies": {"promise": "^7.0.0"},
+  "devDependencies": {
+    "coffee-script": "^1.10.0"
+  },
+  "scripts": {
+     },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ericmosel/PromiseCatcher.git"
+  },
+  "keywords": [
+    "promise",
+    "disk",
+    "cache",
+    "caching"
+  ],
+  "author": "Eric Mosel",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ericmosel/PromiseCatcher/issues"
+  },
+  "homepage": "https://github.com/ericmosel/PromiseCatcher#readme"
+}

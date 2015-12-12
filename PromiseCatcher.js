@@ -3,13 +3,17 @@
   var PromiseCatcher;
 
   PromiseCatcher = (function() {
-    var Fs, Path, Promise, cachePath, candidateQueue, candidateQueueLength, candidateRequestThreshold, cleanCache, debugMode, getCache, isCandidate, liveCacheItems, maxCacheItems, setCache;
+    var Fs, Path, Promise, cachePath, candidateQueue, candidateQueueLength, candidateRequestThreshold, cleanCache, debugMode, getCache, instanceClass, isCandidate, liveCacheItems, maxCacheItems, setCache, thisInstance;
+
+    function PromiseCatcher() {}
 
     Promise = require('promise');
 
     Path = require('path');
 
     Fs = require('fs');
+
+    thisInstance = null;
 
     liveCacheItems = {
       metaData: [],
@@ -32,57 +36,69 @@
 
     candidateRequestThreshold = 2;
 
-    function PromiseCatcher(options) {
-      var index;
-      if (options.cachePath == null) {
-        options.cachePath = '';
-      }
-      if (options.ttl == null) {
-        options.ttl = 240;
-      }
-      if (options.maxCacheItems == null) {
-        options.maxCacheItems = 256;
-      }
-      if (options.candidateQueueLength == null) {
-        options.candidateQueueLength = 40;
-      }
-      if (options.candidateRequestThreshold == null) {
-        options.candidateRequestThreshold = 2;
-      }
-      if (options.debug == null) {
-        options.debug = false;
-      }
-      debugMode = options.debug;
-      cachePath = options.cachePath + 'promises' + Path.sep;
-      maxCacheItems = options.maxCacheItems;
-      candidateQueueLength = options.candidateQueueLength;
-      candidateRequestThreshold = options.candidateRequestThreshold;
-      index = 0;
-      while (index++ < candidateQueueLength) {
-        candidateQueue.ids.push('');
-        candidateQueue.requestCount.push(0);
-      }
-      cachePath = options.cachePath + 'promises' + Path.sep;
-      maxCacheItems = options.maxCacheItems;
-      if (Fs.existsSync(cachePath)) {
-        Fs.readdirSync(cachePath).forEach(function(file, index) {
-          var curPath;
-          curPath = cachePath + file;
-          return Fs.unlinkSync(curPath);
-        });
-      } else {
-        Fs.mkdir(cachePath);
-      }
-    }
+    PromiseCatcher.Instance = function(options) {
+      return thisInstance != null ? thisInstance : thisInstance = new instanceClass(options);
+    };
 
-    PromiseCatcher.prototype.GetCache = function(id, promisesToCache) {
-      var indexMetaData, item, promiseIndex, promises;
-      promises = [];
-      if (liveCacheItems.ids[id] !== void 0) {
-        indexMetaData = liveCacheItems.ids[id];
-        item = liveCacheItems.metaData[indexMetaData];
-        if ('' + item.id === '' + id) {
-          promises = getCache(id, promisesToCache);
+    instanceClass = (function() {
+      function instanceClass(options) {
+        var index;
+        if (options.cachePath == null) {
+          options.cachePath = '';
+        }
+        if (options.ttl == null) {
+          options.ttl = 240;
+        }
+        if (options.maxCacheItems == null) {
+          options.maxCacheItems = 256;
+        }
+        if (options.candidateQueueLength == null) {
+          options.candidateQueueLength = 40;
+        }
+        if (options.candidateRequestThreshold == null) {
+          options.candidateRequestThreshold = 2;
+        }
+        if (options.debug == null) {
+          options.debug = false;
+        }
+        debugMode = options.debug;
+        cachePath = options.cachePath + 'promises' + Path.sep;
+        maxCacheItems = options.maxCacheItems;
+        candidateQueueLength = options.candidateQueueLength;
+        candidateRequestThreshold = options.candidateRequestThreshold;
+        index = 0;
+        while (index++ < candidateQueueLength) {
+          candidateQueue.ids.push('');
+          candidateQueue.requestCount.push(0);
+        }
+        cachePath = options.cachePath + 'promises' + Path.sep;
+        maxCacheItems = options.maxCacheItems;
+        if (Fs.existsSync(cachePath)) {
+          Fs.readdirSync(cachePath).forEach(function(file, index) {
+            var curPath;
+            curPath = cachePath + file;
+            return Fs.unlinkSync(curPath);
+          });
+        } else {
+          Fs.mkdir(cachePath);
+        }
+      }
+
+      instanceClass.prototype.GetCache = function(id, promisesToCache) {
+        var indexMetaData, item, promiseIndex, promises;
+        promises = [];
+        if (liveCacheItems.ids[id] !== void 0) {
+          indexMetaData = liveCacheItems.ids[id];
+          item = liveCacheItems.metaData[indexMetaData];
+          if ('' + item.id === '' + id) {
+            promises = getCache(id, promisesToCache);
+          } else {
+            promiseIndex = 0;
+            while (promiseIndex < promisesToCache.length) {
+              promises.push(promisesToCache[promiseIndex]);
+              promiseIndex++;
+            }
+          }
         } else {
           promiseIndex = 0;
           while (promiseIndex < promisesToCache.length) {
@@ -90,19 +106,16 @@
             promiseIndex++;
           }
         }
-      } else {
-        promiseIndex = 0;
-        while (promiseIndex < promisesToCache.length) {
-          promises.push(promisesToCache[promiseIndex]);
-          promiseIndex++;
-        }
-      }
-      return promises;
-    };
+        return promises;
+      };
 
-    PromiseCatcher.prototype.SetCache = function(id, data) {
-      return setCache(id, data);
-    };
+      instanceClass.prototype.SetCache = function(id, data) {
+        return setCache(id, data);
+      };
+
+      return instanceClass;
+
+    })();
 
     getCache = function(id, promisesToCache) {
       var dataIndex, returnPromises;
@@ -119,7 +132,7 @@
               indexMetaData = liveCacheItems.ids[id];
               liveCacheItems.metaData[indexMetaData].lastUsed = Date.now();
               cachedData = JSON.parse(data);
-              cachedData.fromPromiseCatcher = true;
+              cachedData.IsFromPromiseCatcher = true;
               return fulfill(cachedData);
             }
           });
