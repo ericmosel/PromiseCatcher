@@ -3,7 +3,7 @@
   var PromiseCatcher;
 
   PromiseCatcher = (function() {
-    var Fs, Path, Promise, cachePath, candidateQueue, candidateQueueLength, candidateRequestThreshold, cleanCache, debugMode, getCache, instanceClass, isCandidate, liveCacheItems, maxCacheItems, setCache, thisInstance;
+    var Fs, Path, Promise, cachePath, cacheTimeToLive, candidateQueue, candidateQueueLength, candidateRequestThreshold, cleanCache, debugMode, getCache, instancePrivateClass, isCandidate, liveCacheItems, maxCacheItems, sendBackPromises, setCache, thisInstance;
 
     function PromiseCatcher() {}
 
@@ -30,30 +30,32 @@
 
     cachePath = '';
 
-    maxCacheItems = 256;
+    maxCacheItems = 1024;
 
-    candidateQueueLength = 40;
+    candidateQueueLength = 20;
 
     candidateRequestThreshold = 2;
 
+    cacheTimeToLive = 0;
+
     PromiseCatcher.Instance = function(options) {
-      return thisInstance != null ? thisInstance : thisInstance = new instanceClass(options);
+      return thisInstance != null ? thisInstance : thisInstance = new instancePrivateClass(options);
     };
 
-    instanceClass = (function() {
-      function instanceClass(options) {
+    instancePrivateClass = (function() {
+      function instancePrivateClass(options) {
         var index;
         if (options.cachePath == null) {
           options.cachePath = '';
         }
         if (options.ttl == null) {
-          options.ttl = 240;
+          options.ttl = 0;
         }
         if (options.maxCacheItems == null) {
-          options.maxCacheItems = 256;
+          options.maxCacheItems = 1024;
         }
         if (options.candidateQueueLength == null) {
-          options.candidateQueueLength = 40;
+          options.candidateQueueLength = 20;
         }
         if (options.candidateRequestThreshold == null) {
           options.candidateRequestThreshold = 2;
@@ -66,13 +68,12 @@
         maxCacheItems = options.maxCacheItems;
         candidateQueueLength = options.candidateQueueLength;
         candidateRequestThreshold = options.candidateRequestThreshold;
+        options.ttl;
         index = 0;
         while (index++ < candidateQueueLength) {
           candidateQueue.ids.push('');
           candidateQueue.requestCount.push(0);
         }
-        cachePath = options.cachePath + 'promises' + Path.sep;
-        maxCacheItems = options.maxCacheItems;
         if (Fs.existsSync(cachePath)) {
           Fs.readdirSync(cachePath).forEach(function(file, index) {
             var curPath;
@@ -84,50 +85,68 @@
         }
       }
 
-      instanceClass.prototype.GetCache = function(id, promisesToCache) {
-        var indexMetaData, item, promiseIndex, promises;
-        promises = [];
+      instancePrivateClass.prototype.GetCache = function(id, promisesToCache) {
+        var indexMetaData, item, promises;
+        id = '' + id.replace(/[\\\/]/g, '_');
+        promises = null;
         if (liveCacheItems.ids[id] !== void 0) {
           indexMetaData = liveCacheItems.ids[id];
           item = liveCacheItems.metaData[indexMetaData];
-          if ('' + item.id === '' + id) {
+          if (item.id === id) {
             promises = getCache(id, promisesToCache);
           } else {
-            promiseIndex = 0;
-            while (promiseIndex < promisesToCache.length) {
-              promises.push(promisesToCache[promiseIndex]);
-              promiseIndex++;
-            }
+            promises = sendBackPromises(promisesToCache);
           }
         } else {
-          promiseIndex = 0;
-          while (promiseIndex < promisesToCache.length) {
-            promises.push(promisesToCache[promiseIndex]);
-            promiseIndex++;
-          }
+          promises = sendBackPromises(promisesToCache);
         }
         return promises;
       };
 
-      instanceClass.prototype.SetCache = function(id, data) {
-        return setCache(id, data);
+      instancePrivateClass.prototype.SetCache = function(id, data, ttl) {
+        id = '' + id.replace(/[\\\/]/g, '_');
+        if (ttl == null) {
+          ttl = cacheTimeToLive;
+        }
+        return setCache(id, data, ttl);
       };
 
-      return instanceClass;
+      return instancePrivateClass;
 
     })();
 
     getCache = function(id, promisesToCache) {
       var dataIndex, returnPromises;
-      returnPromises = [];
-      dataIndex = -1;
-      while (++dataIndex < promisesToCache.length) {
-        returnPromises.push(new Promise(function(fulfill, reject) {
-          return Fs.readFile("" + cachePath + id + "_" + dataIndex, function(err, data) {
+      returnPromises = null;
+      if (promisesToCache.length > 0) {
+        returnPromises = [];
+        dataIndex = -1;
+        while (++dataIndex < promisesToCache.length) {
+          returnPromises.push(new Promise(function(fulfill, reject) {
+            var thisIndex;
+            thisIndex = dataIndex;
+            return Fs.readFile("" + cachePath + id, function(err, data) {
+              var cachedData, indexMetaData;
+              if (err != null) {
+                console.log(err);
+                return fulfill(promisesToCache);
+              } else {
+                indexMetaData = liveCacheItems.ids[id];
+                liveCacheItems.metaData[indexMetaData].lastUsed = Date.now();
+                cachedData = JSON.parse(data);
+                cachedData[thisIndex].IsFromPromiseCatcher = true;
+                return fulfill(cachedData[thisIndex]);
+              }
+            });
+          }));
+        }
+      } else {
+        returnPromises = new Promise(function(fulfill, reject) {
+          return Fs.readFile("" + cachePath + id, function(err, data) {
             var cachedData, indexMetaData;
             if (err != null) {
               console.log(err);
-              return fulfill([]);
+              return fulfill(promisesToCache);
             } else {
               indexMetaData = liveCacheItems.ids[id];
               liveCacheItems.metaData[indexMetaData].lastUsed = Date.now();
@@ -136,42 +155,30 @@
               return fulfill(cachedData);
             }
           });
-        }));
+        });
       }
       return returnPromises;
     };
 
-    setCache = function(id, data) {
-      var dataIndex, results;
+    setCache = function(id, data, ttl) {
       if (isCandidate(candidateQueue, id)) {
-        Fs.writeFile("" + cachePath + id + "_0", JSON.stringify(data[0]), function(err, data) {
+        return Fs.writeFile("" + cachePath + id, JSON.stringify(data), function(err, data) {
           if (err != null) {
             return console.log(err);
           } else {
             if (liveCacheItems.count >= maxCacheItems) {
               cleanCache(maxCacheItems);
             }
-            liveCacheItems.ids[id] = liveCacheItems.metaData.length;
-            ++liveCacheItems.count;
-            liveCacheItems.metaData.push({
+            liveCacheItems.ids[id] = liveCacheItems.metaData.push({
               id: id,
               lastUsed: Date.now()
             });
+            ++liveCacheItems.count;
             if (debugMode) {
               return console.log(liveCacheItems);
             }
           }
         });
-        dataIndex = 0;
-        results = [];
-        while (++dataIndex < data.length) {
-          results.push(Fs.writeFile("" + cachePath + id + "_" + dataIndex, JSON.stringify(data[dataIndex]), function(err, data) {
-            if (err != null) {
-              return console.log(err);
-            }
-          }));
-        }
-        return results;
       }
     };
 
@@ -206,6 +213,22 @@
         console.log(candidateQueue);
       }
       return candidateRequestCount > candidateRequestThreshold;
+    };
+
+    sendBackPromises = function(promisesToCache) {
+      var promiseIndex, promisesToReturn;
+      promisesToReturn = null;
+      if (promisesToCache.length > 0) {
+        promisesToReturn = [];
+        promiseIndex = 0;
+        while (promiseIndex < promisesToCache.length) {
+          promisesToReturn.push(promisesToCache[promiseIndex]);
+          promiseIndex++;
+        }
+      } else {
+        promisesToReturn = promisesToCache;
+      }
+      return promisesToReturn;
     };
 
     return PromiseCatcher;
