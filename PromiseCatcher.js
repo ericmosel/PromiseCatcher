@@ -95,6 +95,12 @@
           if (item.id === id) {
             promises = getCache(id, promisesToCache);
           } else {
+            if (debugMode) {
+              console.log('corrupt ' + id);
+              console.log(item);
+              console.log(liveCacheItems.metaData[indexMetaData + 1]);
+              console.log(liveCacheItems.metaData[indexMetaData - 1]);
+            }
             promises = sendBackPromises(promisesToCache);
           }
         } else {
@@ -163,17 +169,23 @@
     setCache = function(id, data, ttl) {
       if (isCandidate(candidateQueue, id)) {
         return Fs.writeFile("" + cachePath + id, JSON.stringify(data), function(err, data) {
+          var indexMetaData;
           if (err != null) {
             return console.log(err);
           } else {
             if (liveCacheItems.count >= maxCacheItems) {
               cleanCache(maxCacheItems);
             }
-            liveCacheItems.ids[id] = liveCacheItems.metaData.push({
-              id: id,
-              lastUsed: Date.now()
-            });
-            ++liveCacheItems.count;
+            if (liveCacheItems.ids[id] === void 0) {
+              indexMetaData = liveCacheItems.metaData.push({
+                id: id,
+                lastUsed: Date.now()
+              });
+              liveCacheItems.ids[id] = indexMetaData - 1;
+              ++liveCacheItems.count;
+            } else {
+              liveCacheItems.metaData[liveCacheItems.ids[id]].lastUsed = Date.now();
+            }
             if (debugMode) {
               return console.log(liveCacheItems);
             }
