@@ -3,7 +3,7 @@
   var PromiseCatcher;
 
   PromiseCatcher = (function() {
-    var Fs, Path, Promise, cachePath, cacheTimeToLive, candidateQueue, candidateQueueLength, candidateRequestThreshold, cleanCache, debugMode, getCache, instancePrivateClass, isCandidate, liveCacheItems, maxCacheItems, sendBackPromises, setCache, thisInstance;
+    var Fs, Path, Promise, cachePath, cacheTimeToLive, candidateQueue, candidateQueueLength, candidateRequestThreshold, cleanCache, clearCacheSizeFraction, debugMode, getCache, instancePrivateClass, isCandidate, liveCacheItems, maxCacheItems, sendBackPromises, setCache, thisInstance;
 
     function PromiseCatcher() {}
 
@@ -32,6 +32,8 @@
 
     maxCacheItems = 1024;
 
+    clearCacheSizeFraction = 4;
+
     candidateQueueLength = 20;
 
     candidateRequestThreshold = 2;
@@ -54,6 +56,9 @@
         if (options.maxCacheItems == null) {
           options.maxCacheItems = 1024;
         }
+        if (options.clearCacheSizeFraction == null) {
+          options.clearCacheSizeFraction = 4;
+        }
         if (options.candidateQueueLength == null) {
           options.candidateQueueLength = 20;
         }
@@ -66,6 +71,7 @@
         debugMode = options.debug;
         cachePath = options.cachePath + 'promises' + Path.sep;
         maxCacheItems = options.maxCacheItems;
+        clearCacheSizeFraction = options.clearCacheSizeFraction;
         candidateQueueLength = options.candidateQueueLength;
         candidateRequestThreshold = options.candidateRequestThreshold;
         options.ttl;
@@ -87,7 +93,7 @@
 
       instancePrivateClass.prototype.GetCache = function(id, promisesToCache) {
         var indexMetaData, item, promises;
-        id = '' + id.replace(/[\\\/]/g, '_');
+        id = require('crypto').createHash('sha1').update('' + id).digest("hex");
         promises = null;
         if (liveCacheItems.ids[id] !== void 0) {
           indexMetaData = liveCacheItems.ids[id];
@@ -110,7 +116,7 @@
       };
 
       instancePrivateClass.prototype.SetCache = function(id, data, ttl) {
-        id = '' + id.replace(/[\\\/]/g, '_');
+        id = require('crypto').createHash('sha1').update('' + id).digest("hex");
         if (ttl == null) {
           ttl = cacheTimeToLive;
         }
@@ -199,7 +205,7 @@
       liveCacheItems.metaData.sort(function(a, b) {
         return b.lastUsed - a.lastUsed;
       });
-      liveCacheItems.metaData.length = Math.floor(maxCacheItems / 4);
+      liveCacheItems.metaData.length = Math.floor(maxCacheItems / clearCacheSizeFraction);
       liveCacheItems.ids = [];
       liveCacheItems.count = 0;
       indexMetaData = 0;

@@ -60,7 +60,9 @@ class PromiseCatcher
         
         GetCache: ( id, promisesToCache ) ->
             # make sure to get rid of any directory path delimiters from the cache ID
-            id = '' + id.replace(/[\\\/]/g,'_')
+            # id = '' + id.replace(/[\\\/]/g,'_')
+            id = require('crypto').createHash('sha1').update('' + id).digest("hex")
+            
             promises = null
 
             # does this id exists in the cache yet?
@@ -88,7 +90,8 @@ class PromiseCatcher
             
         SetCache: ( id, data, ttl ) ->
             # make sure to get rid of any directory path delimiters from the cache ID
-            id = '' + id.replace(/[\\\/]/g,'_')
+            # id = '' + id.replace(/[\\\/]/g,'_')
+            id = require('crypto').createHash('sha1').update('' + id).digest("hex")
             ttl?=cacheTimeToLive
             setCache id, data, ttl
             
@@ -142,6 +145,7 @@ class PromiseCatcher
                     
                     # save the metadata for this item
                     if liveCacheItems.ids[id] == undefined
+                        expireTime = (ttl > 0) ? -1: Date.now() + ttl
                         indexMetaData = liveCacheItems.metaData.push( {id: id, lastUsed: Date.now()} )
                         liveCacheItems.ids[id] = indexMetaData-1
                         ++liveCacheItems.count
